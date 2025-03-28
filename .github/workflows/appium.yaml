@@ -1,111 +1,66 @@
-name: Appium Mobile Test Workflow
+name: Appium CI
 
-on:
-  push:
-    branches:
-      - master
-  workflow_dispatch:  # Allows manual trigger
+on: 
+  push:  # Runs when code is pushed
+  workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    
+  build:
+    runs-on: ubuntu-latest # Use Windows if required: windows-latest
+    strategy:
+      matrix:
+        api-level: [30] # Adjust the Android API level as needed
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4 # Checkout the repository
 
-      # ✅ Install .NET 8.0 to fix SDK error
-      - name: Set up .NET 8.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      # ✅ Install Java 17 for Appium and tests
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 17 (Required for Android SDK)
+        uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # ✅ Install Java 8 for `sdkmanager`
-      - name: Install Java 8 (For SDK Manager)
-        run: |
-          sudo apt update
-          sudo apt install -y openjdk-8-jdk
-          echo "JAVA8_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $GITHUB_ENV
-          echo "✅ Java 8 Installed!"
-
-      # ✅ Set up Android SDK
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3 
-
-      # ✅ Use Java 8 for `sdkmanager` Execution
-      - name: Install Android Emulator Components
-        run: |
-          export JAVA_HOME=$JAVA8_HOME
-          export PATH=$JAVA_HOME/bin:$PATH
-          
-          java -version  # Confirm Java 8 is active
-          
-          sdkmanager --install "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
-          sdkmanager --licenses
-          
-          echo "✅ Android SDK Installed!"
-
-      # ✅ Ensure SDK Path is Correct
-      - name: Set Android SDK Environment Variables
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/emulator" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/tools" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/tools/bin" >> $GITHUB_PATH
-          echo "✅ Android SDK paths set!"
-
-      # ✅ Create Android Virtual Device (AVD)
-      - name: Create Android Virtual Device
-        run: |
-          echo "no" | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd -n test_emulator \
-            -k "system-images;android-35;google_apis;x86_64" \
-            --device "pixel_4"
-
-      # ✅ Start Android Emulator
-      - name: Start Android Emulator
-        timeout-minutes: 15
-        run: |
-          $ANDROID_HOME/emulator/emulator -avd test_emulator -no-window -no-audio -gpu swiftshader_indirect -verbose &
-          
-          MAX_WAIT=300
-          ELAPSED=0
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            sleep 10
-            ELAPSED=$((ELAPSED + 10))
-            
-            echo "Checking emulator..."
-            adb devices -l
-            
-            BOOT_COMPLETED=$(adb shell getprop sys.boot_completed | tr -d '\r')
-            echo "Boot completed: $BOOT_COMPLETED"
-
-            if [ "$BOOT_COMPLETED" = "1" ]; then
-              echo "✅ Emulator fully booted!"
-              break
-            fi
-          done
-
-          adb devices -l
-
-      # ✅ Run Appium Tests
-      - name: Run Appium Tests
-        run: dotnet test
-
-      # ✅ Upload Test Results (Optional)
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v3
         with:
-          name: test-results
-          path: TestResults/
+          dotnet-version: '8.0' # Adjust to match your project version
+
+      - name: Set up Node.js (Required for Appium)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Required Android Packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-${{ matrix.api-level }}" "system-images;android-${{ matrix.api-level }};default;x86_64" "emulator"
+          sdkmanager --licenses
+
+      - name: Create & Start Android Emulator
+        run: |
+          echo "Creating and starting Android emulator..."
+          echo "no" | avdmanager create avd -n test -k "system-images;android-${{ matrix.api-level }};default;x86_64" --device "pixel"
+          nohup $ANDROID_HOME/emulator/emulator -avd test -no-snapshot -no-window -no-audio -no-boot-anim -gpu off &
+          sleep 60 # Allow emulator to boot
+          adb devices # Verify emulator is running
+
+      - name: Install & Start Appium Server
+        run: |
+          npm install -g appium
+          appium --version
+          nohup appium & # Start Appium in the background
+
+      - name: Install Appium UIAutomator2 Driver
+        run: appium driver install uiautomator2
+
+      - name: Run Appium Tests
+        run: |
+          adb devices  # Confirm emulator is detected
+          dotnet test --logger "trx;LogFileName=TestResults.trx"
+          if [ $? -ne 0 ]; then
+            echo "Tests failed, stopping pipeline."
+            exit 1
+          fi
