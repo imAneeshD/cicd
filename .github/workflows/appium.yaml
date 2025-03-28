@@ -1,7 +1,10 @@
+name: Appium Mobile Test Workflow
+
 on:
   push:
     branches:
       - master
+  workflow_dispatch:  # Allows manual triggering from GitHub Actions UI
 
 jobs:
   test:
@@ -11,6 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ✅ Install .NET 8.0 to fix the SDK error
       - name: Set up .NET 8.0
         uses: actions/setup-dotnet@v4
         with:
@@ -19,25 +23,30 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Set up Java 
+      # ✅ Set up Java (required for Appium and Android)
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # ✅ Set up Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3 
 
+      # ✅ Install Android Emulator Components
       - name: Install Android Emulator Components
         run: |
           sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
 
+      # ✅ Create Android Virtual Device (AVD)
       - name: Create Android Virtual Device
         run: |
           echo "no" | avdmanager create avd -n test_emulator \
             -k "system-images;android-35;google_apis;x86_64" \
             --device "pixel_4"
 
+      # ✅ Start Android Emulator with extended diagnostics
       - name: Start Android Emulator with Diagnostics
         timeout-minutes: 15
         run: |
@@ -60,9 +69,20 @@ jobs:
             echo "Boot completed: $BOOT_COMPLETED"
 
             if [ "$BOOT_COMPLETED" = "1" ]; then
-              echo "Emulator fully booted!"
+              echo "✅ Emulator fully booted!"
               break
             fi
           done
 
           adb devices
+
+      # ✅ Run Appium Tests
+      - name: Run Appium Tests
+        run: dotnet test
+
+      # ✅ Upload Test Results (Optional)
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/
