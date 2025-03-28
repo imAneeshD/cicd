@@ -3,7 +3,7 @@ name: Appium Mobile Test Workflow
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   test:
