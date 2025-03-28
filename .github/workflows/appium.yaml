@@ -8,61 +8,74 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up Java 
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-      
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3 
-        
+
       - name: Install Android Emulator Components
         run: |
-          sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
-      
+          sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
+
       - name: Create Android Virtual Device
         run: |
           echo "no" | avdmanager create avd -n test_emulator \
             -k "system-images;android-35;google_apis;x86_64" \
             --device "pixel_4"
-      
+
+      - name: Debug Emulator Installation
+        run: |
+          echo "Checking installed SDK components..."
+          ls -la $ANDROID_HOME/emulator
+          ls -la $ANDROID_HOME/platform-tools
+          which emulator || echo "Emulator not found!"
+
       - name: Start Android Emulator with Diagnostics
         timeout-minutes: 15
         run: |
-          # Verbose emulator startup
-          emulator -avd test_emulator \
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/platform-tools:$PATH
+
+          # Start Emulator
+          nohup emulator -avd test_emulator \
             -no-window \
             -no-audio \
             -gpu swiftshader_indirect \
-            -verbose &
-          
-          # Wait for emulator with extended diagnostics
+            -verbose > emulator.log 2>&1 &
+
+          # Wait for Emulator to Boot
           MAX_WAIT=300
           ELAPSED=0
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             sleep 10
             ELAPSED=$((ELAPSED + 10))
-            
-            # Check device list
-            DEVICES=$(adb devices)
-            echo "Current devices: $DEVICES"
-            
+
+            # Check ADB devices
+            adb devices || echo "ADB not available yet."
+
             # Check boot status
             BOOT_COMPLETED=$(adb shell getprop sys.boot_completed | tr -d '\r')
             echo "Boot completed: $BOOT_COMPLETED"
-            
+
             if [ "$BOOT_COMPLETED" = "1" ]; then
               echo "Emulator fully booted!"
               break
             fi
           done
-          
-          # Final device check
+
+          # Final check for connected devices
           adb devices
+
+      - name: Run Tests
+        run: |
+          echo "Running tests..."
+          # Add your Appium test command here
