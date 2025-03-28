@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch:  # Allows manual trigger from GitHub Actions UI
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   test:
@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Install .NET 8.0 to fix the SDK error
+      # ✅ Install .NET 8.0 to fix SDK error
       - name: Set up .NET 8.0
         uses: actions/setup-dotnet@v4
         with:
@@ -23,27 +23,37 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ✅ Set up Java (Use Java 17 for Appium)
+      # ✅ Install Java 17 for Appium and tests
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # ✅ Install Java 8 for `sdkmanager`
+      - name: Install Java 8 (For SDK Manager)
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-8-jdk
+          echo "JAVA8_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $GITHUB_ENV
+          echo "✅ Java 8 Installed!"
+
       # ✅ Set up Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3 
 
-      # ✅ Install Android Emulator Components (Use Java 8)
+      # ✅ Use Java 8 for `sdkmanager` Execution
       - name: Install Android Emulator Components
         run: |
-          sudo apt update
-          sudo apt install openjdk-8-jdk -y   # Install Java 8
-          export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+          export JAVA_HOME=$JAVA8_HOME
           export PATH=$JAVA_HOME/bin:$PATH
+          
+          java -version  # Confirm Java 8 is active
           
           sdkmanager --install "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
           sdkmanager --licenses
+          
+          echo "✅ Android SDK Installed!"
 
       # ✅ Ensure SDK Path is Correct
       - name: Set Android SDK Environment Variables
@@ -63,8 +73,8 @@ jobs:
             -k "system-images;android-35;google_apis;x86_64" \
             --device "pixel_4"
 
-      # ✅ Start Android Emulator with Debugging
-      - name: Start Android Emulator with Diagnostics
+      # ✅ Start Android Emulator
+      - name: Start Android Emulator
         timeout-minutes: 15
         run: |
           $ANDROID_HOME/emulator/emulator -avd test_emulator -no-window -no-audio -gpu swiftshader_indirect -verbose &
@@ -75,7 +85,7 @@ jobs:
             sleep 10
             ELAPSED=$((ELAPSED + 10))
             
-            echo "Checking for emulator devices..."
+            echo "Checking emulator..."
             adb devices -l
             
             BOOT_COMPLETED=$(adb shell getprop sys.boot_completed | tr -d '\r')
