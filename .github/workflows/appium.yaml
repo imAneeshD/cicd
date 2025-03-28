@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions UI
 
 jobs:
   test:
@@ -23,8 +23,8 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      # ✅ Set up Java (required for Appium and Android)
-      - name: Set up Java
+      # ✅ Set up Java (Use Java 17 for Appium)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -33,6 +33,17 @@ jobs:
       # ✅ Set up Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3 
+
+      # ✅ Install Android Emulator Components (Use Java 8)
+      - name: Install Android Emulator Components
+        run: |
+          sudo apt update
+          sudo apt install openjdk-8-jdk -y   # Install Java 8
+          export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+          export PATH=$JAVA_HOME/bin:$PATH
+          
+          sdkmanager --install "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
+          sdkmanager --licenses
 
       # ✅ Ensure SDK Path is Correct
       - name: Set Android SDK Environment Variables
@@ -44,12 +55,6 @@ jobs:
           echo "$ANDROID_HOME/tools" >> $GITHUB_PATH
           echo "$ANDROID_HOME/tools/bin" >> $GITHUB_PATH
           echo "✅ Android SDK paths set!"
-
-      # ✅ Install Android Emulator Components
-      - name: Install Android Emulator Components
-        run: |
-          sdkmanager --install "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
-          sdkmanager --licenses
 
       # ✅ Create Android Virtual Device (AVD)
       - name: Create Android Virtual Device
