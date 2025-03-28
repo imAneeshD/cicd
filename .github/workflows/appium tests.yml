@@ -1,0 +1,59 @@
+name: Run Appium Tests on Android Emulator
+
+on:
+  push:
+    branches:
+      - master
+
+
+jobs:
+  run-mobile-tests:
+    runs-on: macos-latest
+
+    steps:
+
+      - name : setup java 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin' # See 'Supported distributions' for available options
+          java-version: '21'
+
+
+      - name: pull the project in to the runner
+        uses: actions/checkout@v4
+
+      - name: setup appium
+        run: |
+          npm install -g appium@v1.22
+          appium -v
+          appium &>/dev/null &
+
+  #    - name: run appium android tests
+   #     uses: reactivecircus/android-emulator-runner@v2
+     #   with:
+      #    api-level: 29
+       #   script: ./gradlew connectedCheck
+
+       
+      - name: Setup .NET environment
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x' # Use the appropriate .NET version
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build the project
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default  # Use "google_apis" if using Google Play services
+          arch: x86_64
+          profile: pixel_3a  # Specifies the device profile
+          script: echo "Emulator is ready"
+
+      - name: Execute Appium Tests
+        run: dotnet test --filter "FullyQualifiedName~YourTestNamespace"
