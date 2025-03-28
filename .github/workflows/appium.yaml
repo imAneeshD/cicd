@@ -20,7 +20,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3 
+        uses: android-actions/setup-android@v3
 
       - name: Install Android Emulator Components
         run: |
@@ -42,15 +42,25 @@ jobs:
       - name: Start Android Emulator with Diagnostics
         timeout-minutes: 15
         run: |
-          export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/platform-tools:$PATH
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          export PATH=$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
 
-          # Start Emulator
-          nohup emulator -avd test_emulator \
+          echo "Starting emulator..."
+          nohup $ANDROID_HOME/emulator/emulator -avd test_emulator \
+            -no-snapshot \
             -no-window \
             -no-audio \
             -gpu swiftshader_indirect \
+            -delay-adb \
             -verbose > emulator.log 2>&1 &
+
+          echo "Waiting for emulator to start..."
+          sleep 20  # Give the emulator some time to start
+
+          # Restart ADB to ensure it detects the emulator
+          adb kill-server
+          adb start-server
 
           # Wait for Emulator to Boot
           MAX_WAIT=300
