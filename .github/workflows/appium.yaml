@@ -26,7 +26,6 @@ jobs:
         run: |
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
-          sdkmanager --update
 
       - name: Create Android Virtual Device
         run: |
@@ -35,55 +34,33 @@ jobs:
             --device "pixel_4" \
             --force
 
-      - name: Verify Emulator Installation
-        run: |
-          $ANDROID_HOME/emulator/emulator -list-avds
-          $ANDROID_HOME/emulator/emulator -accel-check
-
       - name: Start Android Emulator
-        timeout-minutes: 15
+        timeout-minutes: 10
         run: |
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           export PATH=$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
 
-          # Start emulator in background
+          # Start emulator with minimal options
           nohup $ANDROID_HOME/emulator/emulator -avd test_emulator \
             -no-audio \
             -no-snapshot \
             -gpu swiftshader_indirect \
-            -camera-back none \
-            -camera-front none \
-            -no-boot-anim \
-            -verbose > emulator.log 2>&1 &
-          EMULATOR_PID=$!
+            -no-boot-anim > emulator.log 2>&1 &
 
-          # Wait for emulator to start
+          # Essential wait for device connection
           adb wait-for-device
-
-          # Wait for full boot
-          boot_completed=0
-          for i in {1..30}; do
-            boot_status=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            if [ "$boot_status" = "1" ]; then
-              boot_completed=1
-              break
-            fi
-            sleep 10
-            echo "Waiting for boot to complete... ($i/30)"
+          
+          # Basic boot completion check
+          until adb shell getprop sys.boot_completed | grep -q "1"; do
+            sleep 5
           done
 
-          if [ $boot_completed -eq 1 ]; then
-            echo "Emulator booted successfully"
-            adb devices
-            adb shell input keyevent 82  # Unlock screen
-          else
-            echo "Emulator failed to boot"
-            cat emulator.log
-            kill $EMULATOR_PID
-            exit 1
-          fi
-
       - name: Run Tests
+        timeout-minutes: 15
         run: |
           echo "Running tests..."
-          # Add your Appium test command here
+          # Your Appium test command here
+          # Example: 
+          # mvn test -Dtest=AppiumTests
+          # OR
+          # npm test
